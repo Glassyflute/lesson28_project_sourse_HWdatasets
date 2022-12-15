@@ -8,7 +8,7 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import DetailView, UpdateView, ListView, CreateView, DeleteView
 
-from ads.models import Category, Ad, AdUser
+from ads.models import Category, Ad, AdUser, Location
 from avito import settings
 
 
@@ -156,7 +156,7 @@ class AdListView(ListView):
                     "logo": ad.logo,
                     "is_published": ad.is_published,
                     "author_id": ad.author_id,
-                    "location_id": ad.location_id,
+                    "location_name": ad.location_name,
                     "categories": list(map(str, ad.categories.all()))
                 }
             )
@@ -187,7 +187,7 @@ class AdDetailView(DetailView):
             "logo": ad.logo,
             "is_published": ad.is_published,
             "author_id": ad.author_id,
-            "location_id": ad.location_id,
+            "location_name": ad.location_name,
             "categories": list(map(str, ad.categories.all()))
         })
 
@@ -198,7 +198,7 @@ class AdCreateView(CreateView):
     Создание нового объявления
     """
     model = Ad
-    fields = ["name", "price", "description", "logo", "is_published", "author_id", "location_id", "categories"]
+    fields = ["name", "price", "description", "logo", "is_published", "author_id", "location_name", "categories"]
 
     def post(self, request, *args, **kwargs):
         ad_data = json.loads(request.body)
@@ -207,9 +207,12 @@ class AdCreateView(CreateView):
             price=ad_data["price"],
             description=ad_data["description"],
             logo=ad_data["logo"],
-            is_published=ad_data["is_published"],
-            location_id=ad_data["location_id"]
+            is_published=ad_data["is_published"]
         )
+
+        location_data = Location.objects.create(name=ad_data["location_name"])
+
+        # ad_new.location_name = get_object_or_404(Location, name=ad_data["location_name"])
 
         ad_new.author_id = get_object_or_404(AdUser, pk=ad_data["author_id"])
 
@@ -232,7 +235,7 @@ class AdCreateView(CreateView):
             "logo": ad_new.logo,
             "is_published": ad_new.is_published,
             "author_id": ad_new.author_id,
-            "location_id": ad_new.location_id,
+            "location_name": location_data.name,
             "categories": list(map(str, ad_new.categories.all()))
         })
 
@@ -243,7 +246,7 @@ class AdUpdateView(UpdateView):
     Обновление данных по выбранному объявлению
     """
     model = Ad
-    fields = ["name", "price", "description", "is_published", "location_id", "categories"]
+    fields = ["name", "price", "description", "is_published", "location_name", "categories"]
 
     def patch(self, request, *args, **kwargs):
         super().post(request, *args, **kwargs)
@@ -255,7 +258,7 @@ class AdUpdateView(UpdateView):
             price=ad_data["price"],
             description=ad_data["description"],
             is_published=ad_data["is_published"],
-            location_id=ad_data["location_id"]
+            location_name=ad_data["location_name"]
         )
 
         ad_upd.author_id = get_object_or_404(AdUser, pk=ad_data["author_id"])
@@ -278,7 +281,7 @@ class AdUpdateView(UpdateView):
                     "description": ad_upd.description,
                     "is_published": ad_upd.is_published,
                     "author_id": ad_upd.author_id,
-                    "location_id": ad_upd.location_id,
+                    "location_name": ad_upd.location_name,
                     "categories": list(map(str, ad_upd.categories.all()))
                 })
 
@@ -349,7 +352,7 @@ class AdUserListView(ListView):
                     "password": ad_user.password,
                     "role": ad_user.role,
                     "age": ad_user.age,
-                    "location_id": ad_user.location_id
+                    "location_name": ad_user.location_name
                 }
             )
 
@@ -380,7 +383,7 @@ class AdUserDetailView(DetailView):
             "password": ad_user.password,
             "role": ad_user.role,
             "age": ad_user.age,
-            "location_id": ad_user.location_id
+            "location_name": ad_user.location_name
         })
 
 
@@ -390,7 +393,7 @@ class AdUserCreateView(CreateView):
     Создание нового пользователя
     """
     model = AdUser
-    fields = ["first_name", "last_name", "username", "password", "role", "age", "location_id"]
+    fields = ["first_name", "last_name", "username", "password", "role", "age", "location_name"]
 
     def post(self, request, *args, **kwargs):
         ad_user_data = json.loads(request.body)
@@ -406,7 +409,7 @@ class AdUserCreateView(CreateView):
             "password": ad_user_new.password,
             "role": ad_user_new.role,
             "age": ad_user_new.age,
-            "location_id": ad_user_new.location_id
+            "location_name": ad_user_new.location_name
         })
 
 
@@ -416,7 +419,7 @@ class AdUserUpdateView(UpdateView):
     Обновление данных по пользователю
     """
     model = AdUser
-    fields = ["first_name", "last_name", "username", "password", "role", "age", "location_id"]
+    fields = ["first_name", "last_name", "username", "password", "role", "age", "location_name"]
 
     def patch(self, request, *args, **kwargs):
         super().post(request, *args, **kwargs)
@@ -428,12 +431,14 @@ class AdUserUpdateView(UpdateView):
             last_name=ad_user_data["last_name"],
             role=ad_user_data["role"],
             age=ad_user_data["age"],
-            location_id=ad_user_data["location_id"]
+            location_name=ad_user_data["location_name"]
         )
 
         # location вводят текстом, после в виде ИД?
 
-        user_upd.username = get_object_or_404(AdUser, pk=ad_user_data["username"])
+        # pk должен получить цифру
+        user_upd.username = get_object_or_404(AdUser, username=ad_user_data["username"])
+        print(user_upd.username)
         if user_upd.username:
             user_upd.password = ad_user_data["password"]
 
@@ -445,7 +450,7 @@ class AdUserUpdateView(UpdateView):
                     "password": user_upd.password,
                     "role": user_upd.role,
                     "age": user_upd.age,
-                    "location_id": user_upd.location_id
+                    "location_name": user_upd.location_name
                 })
 
 

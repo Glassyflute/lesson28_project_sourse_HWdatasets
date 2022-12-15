@@ -15,8 +15,8 @@ class Category(models.Model):
 
 class Location(models.Model):
     name = models.CharField(max_length=200, null=True)
-    lat = models.FloatField(max_length=50)
-    lng = models.FloatField(max_length=50)
+    lat = models.FloatField(max_length=50, null=True)
+    lng = models.FloatField(max_length=50, null=True)
 
     class Meta:
         verbose_name = "Адрес"
@@ -39,7 +39,7 @@ class AdUser(models.Model):
     password = models.SlugField(max_length=30)
     role = models.CharField(max_length=15, choices=ROLES, default="member")
     age = models.PositiveIntegerField()
-    location_id = models.ForeignKey(Location, on_delete=models.CASCADE, null=True)
+    location_name = models.CharField(max_length=1000, null=True)
     # user may have several ads?
     # ads_by_user = models.ManyToManyField(Ad) --не видит Ad, он ниже. взять ads_by_user как annotate
 
@@ -58,7 +58,7 @@ class Ad(models.Model):
     logo = models.ImageField(upload_to='logos/', null=True)
     is_published = models.BooleanField(default=False)
     author_id = models.ForeignKey(AdUser, on_delete=models.CASCADE, null=True)
-    location_id = models.ForeignKey(Location, on_delete=models.CASCADE, null=True)
+    location_name = models.CharField(max_length=1000, null=True)
     categories = models.ManyToManyField(Category)
     # category_id in table Ads
     # no location === annotate???
