@@ -1,5 +1,6 @@
 import json
 
+from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
@@ -78,6 +79,8 @@ class CategoryCreateView(CreateView):
     def post(self, request, *args, **kwargs):
         category_data = json.loads(request.body)
         category_new = Category.objects.create(**category_data)
+        # get_or_create? to check for already existing categories. if exists,
+        # return with warning
 
         return JsonResponse({
             "id": category_new.id,
@@ -93,21 +96,39 @@ class CategoryUpdateView(UpdateView):
     model = Category
     fields = ["name", "is_active"]
 
-    def patch(self, request, *args, **kwargs):
+    def post(self, request, *args, **kwargs):
         super().post(request, *args, **kwargs)
 
         category_data = json.loads(request.body)
 
-        category = Category.objects.create(
-            name=category_data["name"],
-            is_active=category_data["is_active"],
-        )
+        self.object.name = category_data["name"]
+        self.object.is_active = category_data["is_active"]
+        try:
+            self.object.full_clean()
+        except ValidationError as e:
+            return JsonResponse(e.message_dict, status=422)
+
+        self.object.save()
 
         return JsonResponse({
-                    "id": category.id,
-                    "name": category.name,
-                    "is_active": category.is_active
-                })
+            "id": self.object.id,
+            "name": self.object.name,
+            "is_active": self.object.is_active
+        })
+
+        # category = Category.objects.create(
+        #     name=category_data["name"],
+        #     is_active=category_data["is_active"],
+        # )
+
+        # category = Category.objects.update_or_create(
+        #     name=category_data["name"],
+        #     is_active=category_data["is_active"]
+        # )
+        # may remove is_active -- table -set as default?
+        # update_or_create(**category_data)?
+
+
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -198,7 +219,8 @@ class AdCreateView(CreateView):
     Создание нового объявления
     """
     model = Ad
-    fields = ["name", "price", "description", "logo", "is_published", "author_id", "location_name", "categories"]
+    fields = ["name", "price", "description", "is_published", "author_id", "location_name", "categories"]
+    # removed logo from fields
 
     def post(self, request, *args, **kwargs):
         ad_data = json.loads(request.body)
@@ -206,12 +228,14 @@ class AdCreateView(CreateView):
             name=ad_data["name"],
             price=ad_data["price"],
             description=ad_data["description"],
-            logo=ad_data["logo"],
+            # logo=ad_data["logo"],
             is_published=ad_data["is_published"]
         )
 
-        location_data = Location.objects.create(name=ad_data["location_name"])
+        #remove logo field here and upload via separate URL?
 
+        location_data = Location.objects.create(name=ad_data["location_name"])
+        # get_or_create?
         # ad_new.location_name = get_object_or_404(Location, name=ad_data["location_name"])
 
         ad_new.author_id = get_object_or_404(AdUser, pk=ad_data["author_id"])
@@ -232,7 +256,7 @@ class AdCreateView(CreateView):
             "name": ad_new.name,
             "price": ad_new.price,
             "description": ad_new.description,
-            "logo": ad_new.logo,
+            # "logo": ad_new.logo,
             "is_published": ad_new.is_published,
             "author_id": ad_new.author_id,
             "location_name": location_data.name,
@@ -246,22 +270,18 @@ class AdUpdateView(UpdateView):
     Обновление данных по выбранному объявлению
     """
     model = Ad
-    fields = ["name", "price", "description", "is_published", "location_name", "categories"]
+    fields = ["name", "price", "description", "is_published", "author_id", "location_name", "categories"]
 
-    def patch(self, request, *args, **kwargs):
+    def post(self, request, *args, **kwargs):
         super().post(request, *args, **kwargs)
 
         ad_data = json.loads(request.body)
 
-        ad_upd = Ad.objects.create(
-            name=ad_data["name"],
-            price=ad_data["price"],
-            description=ad_data["description"],
-            is_published=ad_data["is_published"],
-            location_name=ad_data["location_name"]
-        )
-
-        ad_upd.author_id = get_object_or_404(AdUser, pk=ad_data["author_id"])
+        self.object.name = ad_data["name"]
+        self.object.price = ad_data["price"]
+        self.object.description = ad_data["description"]
+        self.object.is_published = ad_data["is_published"]
+        self.object.location_name = ad_data["location_name"]
 
         for category in ad_data["categories"]:
             category_obj, created = Category.objects.get_or_create(
@@ -270,19 +290,35 @@ class AdUpdateView(UpdateView):
                     "is_active": True
                 }
             )
-            ad_upd.categories.add(category_obj)
+            self.object.categories.add(category_obj)
 
-        ad_upd.save()
+        self.object.author_id = get_object_or_404(AdUser, pk=ad_data["author_id"])
+        # self.object.author_id = ad_data["author_id"]
+
+        try:
+            self.object.full_clean()
+        except ValidationError as e:
+            return JsonResponse(e.message_dict, status=422)
+
+        self.object.save()
+
+        # ad_upd = Ad.objects.create(
+        #     name=ad_data["name"],
+        #     price=ad_data["price"],
+        #     description=ad_data["description"],
+        #     is_published=ad_data["is_published"],
+        #     location_name=ad_data["location_name"]
+        # )
 
         return JsonResponse({
-                    "id": ad_upd.id,
-                    "name": ad_upd.name,
-                    "price": ad_upd.price,
-                    "description": ad_upd.description,
-                    "is_published": ad_upd.is_published,
-                    "author_id": ad_upd.author_id,
-                    "location_name": ad_upd.location_name,
-                    "categories": list(map(str, ad_upd.categories.all()))
+                    "id": self.object.id,
+                    "name": self.object.name,
+                    "price": self.object.price,
+                    "description": self.object.description,
+                    "is_published": self.object.is_published,
+                    "author_id": self.object.author_id,
+                    "location_name": self.object.location_name,
+                    "categories": list(map(str, self.object.categories.all()))
                 })
 
 
@@ -421,36 +457,55 @@ class AdUserUpdateView(UpdateView):
     model = AdUser
     fields = ["first_name", "last_name", "username", "password", "role", "age", "location_name"]
 
-    def patch(self, request, *args, **kwargs):
+    def post(self, request, *args, **kwargs):
         super().post(request, *args, **kwargs)
 
         ad_user_data = json.loads(request.body)
 
-        user_upd = AdUser.objects.create(
-            first_name=ad_user_data["first_name"],
-            last_name=ad_user_data["last_name"],
-            role=ad_user_data["role"],
-            age=ad_user_data["age"],
-            location_name=ad_user_data["location_name"]
-        )
+        self.object.first_name = ad_user_data["first_name"]
+        self.object.last_name = ad_user_data["last_name"]
+        self.object.role = ad_user_data["role"]
+        self.object.age = ad_user_data["age"]
+        self.object.location_name = ad_user_data["location_name"]
 
+        self.object.username = get_object_or_404(AdUser, username=ad_user_data["username"])
+        if self.object.username:
+            # exists????
+            self.object.password = ad_user_data["password"]
+
+        try:
+            self.object.full_clean()
+        except ValidationError as e:
+            return JsonResponse(e.message_dict, status=422)
+
+        self.object.save()
+
+        # user_upd = AdUser.objects.create(
+        #     first_name=ad_user_data["first_name"],
+        #     last_name=ad_user_data["last_name"],
+        #     role=ad_user_data["role"],
+        #     age=ad_user_data["age"],
+        #     location_name=ad_user_data["location_name"]
+        # )
         # location вводят текстом, после в виде ИД?
-
-        # pk должен получить цифру
-        user_upd.username = get_object_or_404(AdUser, username=ad_user_data["username"])
-        print(user_upd.username)
-        if user_upd.username:
-            user_upd.password = ad_user_data["password"]
+        # # pk должен получить цифру
+        # user_upd.username = get_object_or_404(AdUser, username=ad_user_data["username"])
+        # #
+        # print(user_upd.username)
+        # if user_upd.username:
+        #     # exists????
+        #     user_upd.password = ad_user_data["password"]
+        #     # update_or_create????
 
         return JsonResponse({
-                    "id": user_upd.id,
-                    "first_name": user_upd.first_name,
-                    "last_name": user_upd.last_name,
-                    "username": user_upd.username,
-                    "password": user_upd.password,
-                    "role": user_upd.role,
-                    "age": user_upd.age,
-                    "location_name": user_upd.location_name
+                    "id": self.object.id,
+                    "first_name": self.object.first_name,
+                    "last_name": self.object.last_name,
+                    "username": self.object.username,
+                    "password": self.object.password,
+                    "role": self.object.role,
+                    "age": self.object.age,
+                    "location_name": self.object.location_name
                 })
 
 
